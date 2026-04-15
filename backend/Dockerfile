@@ -14,8 +14,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Expose port
-EXPOSE 8001
+# Render assigns PORT dynamically
+ENV PORT=8001
+EXPOSE ${PORT}
 
-# Start server
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8001"]
+# Use $PORT so Render can assign its own port
+CMD uvicorn server:app --host 0.0.0.0 --port ${PORT}
