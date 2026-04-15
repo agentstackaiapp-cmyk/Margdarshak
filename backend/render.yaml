@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: margdarshak-backend
+    runtime: python
+    repo: https://github.com/Mr-Amresh/MargdarshakAiApp.git
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MONGO_URL
+        sync: false  # Set manually in Render dashboard
+      - key: DB_NAME
+        value: test_database
+      - key: EMERGENT_LLM_KEY
+        sync: false  # Set manually in Render dashboard
+      - key: LLM_MODEL
+        value: gpt-4o
+      - key: MAX_HISTORY_TURNS
+        value: "6"
+      - key: MAX_TOKENS
+        value: "2000"
+      - key: PYTHON_VERSION
+        value: "3.11.0"

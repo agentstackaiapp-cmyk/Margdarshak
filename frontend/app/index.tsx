@@ -405,11 +405,15 @@ function parse(content: string): { type: 'text' | 'shloka'; text: string }[] {
 }
 
 /* ═══════════════════════════════════════════════
-   LOGIN SCREEN
+   LOGIN SCREEN — Email/Password + Google OAuth
 ═══════════════════════════════════════════════ */
 function LoginScreen() {
-  const [busy, setBusy]   = useState(false);
-  const [err, setErr]     = useState('');
+  const [busy, setBusy]       = useState(false);
+  const [err, setErr]         = useState('');
+  const [mode, setMode]       = useState<'login' | 'register'>('login');
+  const [name, setName]       = useState('');
+  const [email, setEmail]     = useState('');
+  const [password, setPassword] = useState('');
   const fade  = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(32)).current;
 
@@ -420,6 +424,42 @@ function LoginScreen() {
     ]).start();
   }, []);
 
+  const handleEmailAuth = async () => {
+    if (!email.trim()) { setErr('Please enter your email'); return; }
+    if (!password.trim() || password.length < 6) { setErr('Password must be at least 6 characters'); return; }
+    if (mode === 'register' && !name.trim()) { setErr('Please enter your name'); return; }
+
+    setBusy(true);
+    setErr('');
+    try {
+      const endpoint = mode === 'register' ? '/api/auth/register' : '/api/auth/email-login';
+      const body = mode === 'register'
+        ? { name: name.trim(), email: email.trim(), password }
+        : { email: email.trim(), password };
+
+      const res = await fetch(`${API}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.session_token) {
+          await AsyncStorage.setItem('session_token', data.session_token);
+          await useAuthStore.getState().login(data.session_token);
+        }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setErr(errData.detail || 'Something went wrong. Please try again.');
+      }
+    } catch {
+      setErr('Connection error. Please check your internet.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleGoogleSignIn = async () => {
     setBusy(true);
     setErr('');
@@ -429,13 +469,11 @@ function LoginScreen() {
         const authUrl = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
         window.location.href = authUrl;
       } else {
-        // Native: Use expo-web-browser for OAuth
-        const redirectUrl = Linking.createURL('auth-callback');
+        const redirectUrl = Linking.createURL('/');
         const authUrl = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
         const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
         if (result.type === 'success' && result.url) {
-          const url = result.url;
-          const hashPart = url.split('#')[1] || '';
+          const hashPart = result.url.split('#')[1] || '';
           const params = new URLSearchParams(hashPart);
           const sessionId = params.get('session_id');
           if (sessionId) {
@@ -455,15 +493,14 @@ function LoginScreen() {
         }
         setBusy(false);
       }
-    } catch (error) {
-      setErr('Unable to sign in right now. Please try again.');
+    } catch {
+      setErr('Unable to sign in with Google right now.');
       setBusy(false);
     }
   };
 
   return (
     <LinearGradient colors={T.gradBg} style={LG.root}>
-      {/* Glow orbs */}
       <View style={[LG.orb, LG.orb1]} />
       <View style={[LG.orb, LG.orb2]} />
 
@@ -482,29 +519,96 @@ function LoginScreen() {
 
           {/* Card */}
           <Animated.View style={[LG.card, { opacity: fade, transform: [{ translateY: slide }] }]}>
-            <Text style={LG.cardTitle}>Welcome</Text>
+            <Text style={LG.cardTitle}>{mode === 'register' ? 'Create Account' : 'Welcome Back'}</Text>
             <Text style={LG.cardSub}>
-              Ask in Hindi, English, or Hinglish — get wisdom straight from the scriptures.
+              {mode === 'register'
+                ? 'Join to receive wisdom from Hindu scriptures.'
+                : 'Sign in to continue your spiritual journey.'}
             </Text>
 
-            {!!err && <View style={LG.errRow}><Text style={LG.errTxt}>⚠ {err}</Text></View>}
+            {!!err && <View style={LG.errRow}><Text style={LG.errTxt}>{err}</Text></View>}
 
-            <TouchableOpacity onPress={handleGoogleSignIn} disabled={busy} activeOpacity={0.85} style={{ marginTop: 24 }}>
-              <LinearGradient colors={['#4285F4', '#34A853']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[LG.btn, busy && { opacity: 0.6 }]}>
+            {/* Name field (register only) */}
+            {mode === 'register' && (
+              <View style={LG.field}>
+                <Text style={LG.label}>NAME</Text>
+                <TextInput
+                  testID="register-name-input"
+                  style={LG.input}
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="Your name"
+                  placeholderTextColor={T.text3}
+                  autoCapitalize="words"
+                />
+              </View>
+            )}
+
+            {/* Email field */}
+            <View style={LG.field}>
+              <Text style={LG.label}>EMAIL</Text>
+              <TextInput
+                testID="email-input"
+                style={LG.input}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="you@example.com"
+                placeholderTextColor={T.text3}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoCorrect={false}
+              />
+            </View>
+
+            {/* Password field */}
+            <View style={LG.field}>
+              <Text style={LG.label}>PASSWORD</Text>
+              <TextInput
+                testID="password-input"
+                style={LG.input}
+                value={password}
+                onChangeText={setPassword}
+                placeholder={mode === 'register' ? 'Min 6 characters' : 'Your password'}
+                placeholderTextColor={T.text3}
+                secureTextEntry
+              />
+            </View>
+
+            {/* Submit button */}
+            <TouchableOpacity testID="auth-submit-btn" onPress={handleEmailAuth} disabled={busy} activeOpacity={0.85} style={{ marginTop: 8 }}>
+              <LinearGradient colors={T.gradAccent} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[LG.btn, busy && { opacity: 0.6 }]}>
                 {busy
                   ? <ActivityIndicator color="#fff" size="small" />
-                  : (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                      <Text style={{ fontSize: 20 }}>🔐</Text>
-                      <Text style={LG.btnTxt}>Continue with Google</Text>
-                    </View>
-                  )}
+                  : <Text style={LG.btnTxt}>{mode === 'register' ? 'Create Account' : 'Sign In'}</Text>}
               </LinearGradient>
             </TouchableOpacity>
 
-            <Text style={{ fontSize: 11, color: T.text3, textAlign: 'center', marginTop: 16, lineHeight: 16 }}>
-              By continuing, you agree to receive spiritual guidance based on Hindu scriptures.
-            </Text>
+            {/* Toggle mode */}
+            <TouchableOpacity testID="toggle-auth-mode" onPress={() => { setMode(mode === 'login' ? 'register' : 'login'); setErr(''); }} style={{ marginTop: 16 }}>
+              <Text style={{ fontSize: 13, color: T.text2, textAlign: 'center' }}>
+                {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
+                <Text style={{ color: T.accent, fontWeight: '700' }}>
+                  {mode === 'login' ? 'Create one' : 'Sign in'}
+                </Text>
+              </Text>
+            </TouchableOpacity>
+
+            {/* Divider */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 20, gap: 12 }}>
+              <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
+              <Text style={{ fontSize: 11, color: T.text3, letterSpacing: 1 }}>OR</Text>
+              <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
+            </View>
+
+            {/* Google Sign-In */}
+            <TouchableOpacity testID="google-signin-btn" onPress={handleGoogleSignIn} disabled={busy} activeOpacity={0.85} style={{ marginTop: 16 }}>
+              <LinearGradient colors={['#4285F4', '#34A853']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[LG.btn, busy && { opacity: 0.6 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Text style={{ fontSize: 18, color: '#fff' }}>G</Text>
+                  <Text style={LG.btnTxt}>Continue with Google</Text>
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
           </Animated.View>
 
           {/* Verse */}

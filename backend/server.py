@@ -141,6 +141,73 @@ class DevLoginRequest(BaseModel):
     name: str
     email: str
 
+class EmailRegisterRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+
+class EmailLoginRequest(BaseModel):
+    email: str
+    password: str
+
+def _hash_password(password: str) -> str:
+    import bcrypt
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+def _verify_password(plain: str, hashed: str) -> bool:
+    import bcrypt
+    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+
+@api_router.post("/auth/register")
+async def email_register(req: EmailRegisterRequest, response: Response):
+    """Register a new user with email and password"""
+    email = req.email.strip().lower()
+    if not email or not req.password or len(req.password) < 6:
+        raise HTTPException(status_code=400, detail="Email and password (min 6 chars) are required")
+
+    existing = await db.users.find_one({"email": email}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=409, detail="An account with this email already exists. Please sign in.")
+
+    user_id = f"user_{uuid.uuid4().hex[:12]}"
+    password_hash = _hash_password(req.password)
+    user_doc = User(user_id=user_id, email=email, name=req.name.strip() or "Seeker").model_dump()
+    user_doc["password_hash"] = password_hash
+    await db.users.insert_one(user_doc)
+
+    session_token = f"session_{uuid.uuid4().hex}"
+    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    await db.user_sessions.insert_one(UserSession(user_id=user_id, session_token=session_token, expires_at=expires_at).model_dump())
+
+    response.set_cookie(key="session_token", value=session_token, httponly=True, secure=False, samesite="lax", path="/", max_age=7*24*60*60)
+    safe_user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
+    return {**safe_user, "session_token": session_token}
+
+@api_router.post("/auth/email-login")
+async def email_login(req: EmailLoginRequest, response: Response):
+    """Sign in with email and password"""
+    email = req.email.strip().lower()
+    user_doc = await db.users.find_one({"email": email}, {"_id": 0})
+
+    if not user_doc:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    stored_hash = user_doc.get("password_hash")
+    if not stored_hash:
+        raise HTTPException(status_code=401, detail="This account uses Google Sign-In. Please use 'Continue with Google' instead.")
+
+    if not _verify_password(req.password, stored_hash):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    user_id = user_doc["user_id"]
+    session_token = f"session_{uuid.uuid4().hex}"
+    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    await db.user_sessions.insert_one(UserSession(user_id=user_id, session_token=session_token, expires_at=expires_at).model_dump())
+
+    response.set_cookie(key="session_token", value=session_token, httponly=True, secure=False, samesite="lax", path="/", max_age=7*24*60*60)
+    safe_user = {k: v for k, v in user_doc.items() if k != "password_hash"}
+    return {**safe_user, "session_token": session_token}
+
 @api_router.post("/auth/dev-login")
 async def dev_login(request: DevLoginRequest, response: Response):
     """Local dev login — creates a session directly without OAuth"""
