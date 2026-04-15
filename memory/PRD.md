@@ -8,16 +8,18 @@ Margdarshak is a spiritual guidance AI app rooted in Sanatana Dharma. It provide
 - **Frontend**: Expo/React Native + expo-router + Zustand
 - **AI**: Emergent LLM Integration (GPT-4o)
 - **RAG**: VR-RAG (Vectorless Reasoning-Based RAG) with BM25 scoring on scripture PDFs
-- **Auth**: Google OAuth via Emergent Auth + Dev Login fallback
+- **Auth**: Google OAuth via Emergent Auth (redirect to root with hash param) + Dev Login fallback
 
-## Core Features
-1. **Authentication**: Google OAuth (Emergent-managed) + dev-login for testing
-2. **Onboarding**: 4-step personalization (Deity, Scriptures, Goals, Language)
-3. **AI Chat**: Scripture-based spiritual guidance with shloka rendering
-4. **VR-RAG**: BM25-based scripture retrieval from PDF databases
-5. **YouTube Integration**: Contextual video recommendations via yt-dlp
-6. **Guardrails**: Input/output filtering for safe content
-7. **Conversation History**: Full conversation management with persistence
+## Auth Flow (Production)
+1. User clicks "Continue with Google" → redirect to `https://auth.emergentagent.com/?redirect=ORIGIN/`
+2. After Google login → redirected back to `/#session_id=...`
+3. `index.tsx` App component detects `session_id` in hash → exchanges for session token via `POST /api/auth/session`
+4. Session token stored in AsyncStorage → user logged in
+5. No separate `/auth-callback` route needed (eliminates expo-router mount race condition)
+
+## Routes
+- `/` — Main app (login → onboarding → chat, all in one screen)
+- All legacy routes removed (home, ask, history, profile) — consolidated into single-page architecture
 
 ## API Endpoints
 - `POST /api/auth/dev-login` - Dev login
@@ -35,10 +37,3 @@ Margdarshak is a spiritual guidance AI app rooted in Sanatana Dharma. It provide
 - `GET /api/preferences/schema` - Onboarding schema
 - `GET /api/preferences` - Get user preferences
 - `POST /api/preferences` - Save user preferences
-
-## Environment Variables
-### Backend (.env)
-- MONGO_URL, DB_NAME, EMERGENT_LLM_KEY, LLM_MODEL, MAX_HISTORY_TURNS, MAX_TOKENS
-
-### Frontend (.env)
-- EXPO_TUNNEL_SUBDOMAIN, EXPO_PACKAGER_HOSTNAME, EXPO_PUBLIC_BACKEND_URL

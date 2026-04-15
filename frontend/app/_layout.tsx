@@ -15,7 +15,6 @@ export default function RootLayout() {
       <StatusBar style="light" />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
-        <Stack.Screen name="chat/[id]" options={{ headerShown: true, headerTitle: 'Conversation', headerBackTitle: 'Back' }} />
       </Stack>
     </>
   );

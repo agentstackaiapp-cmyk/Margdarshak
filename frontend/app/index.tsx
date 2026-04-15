@@ -7,6 +7,8 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { WebView } from 'react-native-webview';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { useAuthStore } from '../store/authStore';
 import { usePreferencesStore } from '../store/preferencesStore';
 import OnboardingFlow from '../components/onboarding/OnboardingFlow';
@@ -418,22 +420,43 @@ function LoginScreen() {
     ]).start();
   }, []);
 
-  const handleGoogleSignIn = () => {
+  const handleGoogleSignIn = async () => {
     setBusy(true);
     setErr('');
     try {
-      // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        const redirectUrl = window.location.origin + '/auth-callback';
+        const redirectUrl = window.location.origin + '/';
         const authUrl = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
         window.location.href = authUrl;
       } else {
-        // For mobile, we'll handle OAuth in the future
-        setErr('Google Sign-In is currently available on web only.');
+        // Native: Use expo-web-browser for OAuth
+        const redirectUrl = Linking.createURL('auth-callback');
+        const authUrl = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+        const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
+        if (result.type === 'success' && result.url) {
+          const url = result.url;
+          const hashPart = url.split('#')[1] || '';
+          const params = new URLSearchParams(hashPart);
+          const sessionId = params.get('session_id');
+          if (sessionId) {
+            const response = await fetch(`${API}/api/auth/session`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ session_id: sessionId }),
+            });
+            if (response.ok) {
+              const userData = await response.json();
+              if (userData.session_token) {
+                await AsyncStorage.setItem('session_token', userData.session_token);
+                await useAuthStore.getState().login(userData.session_token);
+              }
+            }
+          }
+        }
         setBusy(false);
       }
     } catch (error) {
-      setErr('Failed to initiate Google Sign-In.');
+      setErr('Unable to sign in right now. Please try again.');
       setBusy(false);
     }
   };
@@ -970,16 +993,60 @@ const CH = StyleSheet.create({
    ROOT
 ═══════════════════════════════════════════════ */
 export default function App() {
-  const { user, sessionToken, isLoading } = useAuthStore();
+  const { user, sessionToken, isLoading, login } = useAuthStore();
   const { prefs, isLoading: prefsLoading, load } = usePreferencesStore();
+  const [authProcessing, setAuthProcessing] = useState(false);
+  const authProcessed = useRef(false);
+
+  // Handle OAuth callback: check for session_id in URL hash
+  useEffect(() => {
+    if (authProcessed.current) return;
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+    const hash = window.location.hash;
+    if (!hash.includes('session_id=')) return;
+
+    authProcessed.current = true;
+    setAuthProcessing(true);
+
+    const params = new URLSearchParams(hash.substring(1));
+    const sessionId = params.get('session_id');
+
+    if (!sessionId) {
+      window.location.hash = '';
+      setAuthProcessing(false);
+      return;
+    }
+
+    (async () => {
+      try {
+        const response = await fetch(`${API}/api/auth/session`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ session_id: sessionId }),
+        });
+        if (response.ok) {
+          const userData = await response.json();
+          if (userData.session_token) {
+            await AsyncStorage.setItem('session_token', userData.session_token);
+            window.location.hash = '';
+            await login(userData.session_token);
+          }
+        }
+      } catch { /* silent */ }
+      window.location.hash = '';
+      setAuthProcessing(false);
+    })();
+  }, []);
 
   // Load preferences whenever a user session appears
   useEffect(() => {
     if (user && sessionToken) load(sessionToken);
   }, [user?.user_id]);
 
-  // ── Splash / loading ──────────────────���───────────────────────────────
-  if (isLoading || (user && prefsLoading)) return (
+  // ── Splash / loading ──────────────────────────────────────────────────
+  if (isLoading || authProcessing || (user && prefsLoading)) return (
     <LinearGradient colors={T.gradBg} style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
       <LinearGradient
         colors={T.gradAccent}
@@ -989,13 +1056,16 @@ export default function App() {
         <Text style={{ fontSize: 32, color: '#fff' }}>ॐ</Text>
       </LinearGradient>
       <ActivityIndicator color={T.accent} style={{ marginTop: 24 }} />
+      {authProcessing && (
+        <Text style={{ color: T.text2, marginTop: 12, fontSize: 14 }}>Completing sign in...</Text>
+      )}
     </LinearGradient>
   );
 
-  // ── Not logged in ──────────��───────────────────────────────────���──────
+  // ── Not logged in ─────────────────────────────────────────────────────
   if (!user || !sessionToken) return <LoginScreen />;
 
-  // ── Onboarding not yet completed ───────��──────────────────────────────
+  // ── Onboarding not yet completed ──────────────────────────────────────
   if (!prefs?.onboarding_completed) {
     return (
       <OnboardingFlow
@@ -1006,6 +1076,6 @@ export default function App() {
     );
   }
 
-  // ── Main chat ───────────��─────────────────────────────────────────────
+  // ── Main chat ─────────────────────────────────────────────────────────
   return <ChatApp />;
 }
