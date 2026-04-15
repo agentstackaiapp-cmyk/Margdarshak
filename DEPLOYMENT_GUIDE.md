@@ -7,7 +7,7 @@
 
 | File | Location | Purpose |
 |------|----------|---------|
-| `requirements.txt` | `/backend/requirements.txt` | 126 Python packages (FastAPI, motor, bcrypt, PyMuPDF, yt-dlp, emergentintegrations, etc.) |
+| `requirements.txt` | `/backend/requirements.txt` | Python packages (FastAPI, motor, bcrypt, PyMuPDF, yt-dlp, openai, etc.) |
 | `Dockerfile` | `/backend/Dockerfile` | Docker container for Render deploy |
 | `render.yaml` | `/backend/render.yaml` | Render service config with env vars |
 | `vercel.json` | `/frontend/vercel.json` | Vercel SPA config with rewrites |
@@ -88,8 +88,8 @@ Click **Environment** tab → Add these variables:
 |-----|-------|
 | `MONGO_URL` | `mongodb+srv://margdarshak:YOUR_PASSWORD@margdarshakcluster.xxxxx.mongodb.net/test_database?retryWrites=true&w=majority` |
 | `DB_NAME` | `test_database` |
-| `EMERGENT_LLM_KEY` | `sk-emergent-dE1B9F7C38251B7F84` |
-| `LLM_MODEL` | `gpt-4o` |
+| `OPENAI_API_KEY` | Your OpenAI API key (`sk-proj-...`) |
+| `LLM_MODEL` | `gpt-5-nano` |
 | `MAX_HISTORY_TURNS` | `6` |
 | `MAX_TOKENS` | `2000` |
 | `PYTHON_VERSION` | `3.11.0` |
@@ -221,8 +221,8 @@ Expected: AI response with scripture references
 ```env
 MONGO_URL=mongodb+srv://margdarshak:PASSWORD@cluster.mongodb.net/test_database?retryWrites=true&w=majority
 DB_NAME=test_database
-EMERGENT_LLM_KEY=sk-emergent-dE1B9F7C38251B7F84
-LLM_MODEL=gpt-4o
+OPENAI_API_KEY=sk-proj-...your-key-here...
+LLM_MODEL=gpt-5-nano
 MAX_HISTORY_TURNS=6
 MAX_TOKENS=2000
 PYTHON_VERSION=3.11.0

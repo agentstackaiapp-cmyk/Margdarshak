@@ -25,8 +25,8 @@ class Settings:
         self.DB_NAME = os.environ.get("DB_NAME", "test_database")
 
         # LLM
-        self.EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
-        self.LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4o")
+        self.OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+        self.LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-5-nano")
         self.LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "2000"))
         self.LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "0.7"))
 

@@ -11,10 +11,10 @@ services:
         sync: false
       - key: DB_NAME
         value: test_database
-      - key: EMERGENT_LLM_KEY
+      - key: OPENAI_API_KEY
         sync: false
       - key: LLM_MODEL
-        value: gpt-4o
+        value: gpt-5-nano
       - key: MAX_HISTORY_TURNS
         value: "6"
       - key: MAX_TOKENS

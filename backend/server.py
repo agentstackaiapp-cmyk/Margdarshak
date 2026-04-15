@@ -13,7 +13,7 @@ from typing import List, Optional
 import uuid
 from datetime import datetime, timezone, timedelta
 import httpx
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from openai import AsyncOpenAI
 from youtube_video import get_embed_url
 
 # ── Shared DB singleton (must be initialised before any service imports) ──
@@ -39,9 +39,9 @@ app = FastAPI()
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
-# LLM Configuration - using Emergent Universal Key
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
-LLM_MODEL = os.environ.get('LLM_MODEL', 'gpt-4o')
+# LLM Configuration
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+LLM_MODEL = os.environ.get('LLM_MODEL', 'gpt-5-nano')
 
 # Keep last N turns
 MAX_HISTORY_TURNS = int(os.environ.get('MAX_HISTORY_TURNS', '6'))
@@ -502,16 +502,18 @@ async def ask_question(
             messages.append({"role": msg.role, "content": msg.content})
         messages.append({"role": "user", "content": data.question})
 
-        # Use EmergentIntegrations LLM Chat
-        llm_chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"session_{uuid.uuid4().hex[:12]}",
-            system_message=system_message
+        # Use OpenAI Responses API
+        openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+        # messages[0] is the system message; rest are the conversation turns
+        input_messages = messages[1:]
+        completion = await openai_client.responses.create(
+            model=LLM_MODEL,
+            instructions=system_message,
+            input=input_messages,
+            max_output_tokens=MAX_TOKENS,
+            store=True,
         )
-        
-        # Send the user's question using UserMessage
-        user_message = UserMessage(text=data.question)
-        ai_response = await llm_chat.send_message(user_message)
+        ai_response = completion.output_text
 
         # ── OUTPUT GUARDRAIL ─────────────────────────────────────────────────
         output_check = check_output(ai_response)
@@ -696,17 +698,17 @@ async def ask_question_stream(
     async def token_stream():
         full_response = ""
         try:
-            # Use EmergentIntegrations LLM Chat for streaming
-            # Note: emergentintegrations doesn't have streaming, so we'll simulate it
-            llm_chat = LlmChat(
-                api_key=EMERGENT_LLM_KEY,
-                session_id=f"session_{uuid.uuid4().hex[:12]}",
-                system_message=system_message
+            # Use OpenAI Responses API (simulated streaming via chunked output)
+            openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+            input_messages = messages[1:]
+            completion = await openai_client.responses.create(
+                model=LLM_MODEL,
+                instructions=system_message,
+                input=input_messages,
+                max_output_tokens=MAX_TOKENS,
+                store=True,
             )
-            
-            # Send the user's question using UserMessage
-            user_message = UserMessage(text=data.question)
-            full_response = await llm_chat.send_message(user_message)
+            full_response = completion.output_text
             
             # Simulate streaming by sending the full response as chunks
             chunk_size = 50  # Send 50 characters at a time
