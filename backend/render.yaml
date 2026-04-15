@@ -8,11 +8,11 @@ services:
     startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: MONGO_URL
-        sync: false  # Set manually in Render dashboard
+        sync: false
       - key: DB_NAME
         value: test_database
       - key: EMERGENT_LLM_KEY
-        sync: false  # Set manually in Render dashboard
+        sync: false
       - key: LLM_MODEL
         value: gpt-4o
       - key: MAX_HISTORY_TURNS

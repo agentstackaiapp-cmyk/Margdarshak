@@ -1,4 +1,9 @@
 """Core module for configuration and utilities"""
-from .config import settings
+# Lazy import — don't instantiate Settings at import time
+# This prevents crashes when env vars aren't yet available
 
-__all__ = ['settings']
+def get_settings():
+    from .config import settings
+    return settings
+
+__all__ = ['get_settings']
